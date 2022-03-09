@@ -19,7 +19,7 @@ Implemento el interpretador 1. Las cosas importantes a saber es que solo hay un 
 Añado recursión, la idea general es que el lado izquierdo de un igual esta en un nivel superior al lado derecho. Esto debido a que si un elemento esta en un mismo nivel, entonces va a asignarse y a leerse infinitas veces. También agrego paso por valor y por referencia a las funciones.
 
 ## **CUARTA ETAPA**
-Agrego estructuras **for** e **IF** que sirven para hacer sumatorias sin llamar a un procedimiento. Estas solo están permitidas en el main(){...}.
+Agrego estructuras **for** e **IF** que sirven para hacer, entre otras cosas, sumatorias sin llamar a un procedimiento. Estas solo están permitidas en el main(){...}.
 
 ## **QUINTA ETAPA ***(Y FINAL)*** ** 
 
