@@ -6,7 +6,7 @@ Proyecto final materia FLP. Interpretador en base a c++.
 * Edinson Orlando Dorado Dorado 201941966
 
 ## **RESUMEN**
-Creao un lenguaje de programacion tomando partes de lenguajes conocidos, como por ejemplo: c++, python, js.
+Crea un lenguaje de programacion tomando partes de lenguajes conocidos, como por ejemplo: c++, python, js.
 
 ## **PRIMERA ETAPA**
 Creo la forma BNF de nuestro lenguaje, gramatica que se usa para crear el scanner y el parseador.
