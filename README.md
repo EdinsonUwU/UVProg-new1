@@ -22,4 +22,4 @@ Añado recursión, la idea general es que el lado izquierdo de un igual esta en 
 Agrego estructuras **for** e **IF** que sirven para hacer, entre otras cosas, sumatorias sin llamar a un procedimiento. Estas solo están permitidas en el main(){...}.
 
 ## **QUINTA ETAPA ***(Y FINAL)*** ** 
-
+Hago que el lenguaje sea fuertemente tipado, se hace chequeo de tipos.
