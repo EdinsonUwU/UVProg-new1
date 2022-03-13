@@ -1,7 +1,31 @@
 #lang eopl
 
+;Integrante:
+;EDINSON ORLANDO DORADO DORADO 1941966-3743
 
-;_____________________________________________ BNF en revision, debido a cambios en la gramatical _____________________________________________
+;INSPIRADO EN:
+;Expresiones: terminan en (;) o en (}). No Pueden contener o ser asignadas a otras expresiones, ¿Por qué? Por los (;)    --> c++
+;Procedimientos (creacion): terminan en (}). No pueden ser usados dentro de if, o dentro otros procedimientos.           --> c++
+;Procedimientos-inter (llamado): tienen la forma 'f(int a, int b)'. Pueden ser almacenados, llamados dentor de condiciones de if, dentro de otros procedimientos. --> c++
+;Primitivas: notacion infija, se obliga al programador a expresar que se debe hacer primero --> c++ (mayormente)
+;Expresiones-inter: son expresiones que pueden ser colocadas dentro de codicionales, ej: 'if(bool a){...' o dentro de llamados a procedimientos
+;                   ej: 'if( factorial(int (1 + 2)) ){...'                                                                --> c++
+
+
+
+;;Notas importantes
+;; null equivale a @UVProgVal
+;; el paso por valor son todos los pasos que no tienen "ref" al comienzo. (paso por valor)
+;; cuando un identificador esta despues de un ref, lo que se retorna ahi es una referencia, no un valor (paso por referencia)
+;; La secuenciacion son todas las listas de expresiones antes de un return. Por tanto cada if, main, procedimiento, tienen secuenciacion
+;; dentro de un if, antes de un return, se pueden crear mas if
+;; Todos los procedimientos son recursivos
+;; Todo esto se muestra en los ejemplos.
+
+;_____________________________________________ FIN basado en _____________________________________________
+
+
+;_____________________________________________ BNF en el UVProg.rkt _____________________________________________
 
 (define scanner-spec-simple-interpreter
   '((comment 
@@ -33,13 +57,13 @@
     ;                                   vec,                pos,               new-value
     
 
-    (clase-de-igualdad ("const" id "=") constante)                   ;; constantes -por valor
-    (clase-de-igualdad ("var"     id "=") variable)                    ;; variables  -por valor
-    (clase-de-igualdad ("const&"   id "=") constante-ref)              ;; constantes -por ref
-    (clase-de-igualdad ("var&"     id "=") variable-ref)               ;; variables  -por ref    
-    (clase-de-igualdad ("set_var" id "=") asignacion-multiple)         ;; usado para asignar variables
-    (clase-de-igualdad ("let"     id "=") variable-unica)              ;; usado para crear variables de unica asignacion
-    (clase-de-igualdad ("unique_assignment" id "=") ultima-asignacion) ;; usado para asignar variables una unica vez
+    (clase-de-igualdad ("const" tipo id "=") constante)                   ;; constantes -por valor
+    (clase-de-igualdad ("var" tipo  id "=") variable)                    ;; variables  -por valor
+    (clase-de-igualdad ("const&" tipo  id "=") constante-ref)              ;; constantes -por ref
+    (clase-de-igualdad ("var&" tipo id "=") variable-ref)               ;; variables  -por ref    
+    (clase-de-igualdad ("set_var" tipo id "=") asignacion-multiple)         ;; usado para asignar variables
+    (clase-de-igualdad ("let" tipo id "=") variable-unica)              ;; usado para crear variables de unica asignacion
+    (clase-de-igualdad ("unique_assignment" tipo id "=") ultima-asignacion) ;; usado para asignar variables una unica vez
     ;; no hago las ref para let (variable unica) debido a que haria lo mismo que el const en general
 
     (tipo ("int") tipo-int)
@@ -51,8 +75,8 @@
     (tipo ("string") tipo-string)
     (tipo ("list") tipo-list)
     (tipo ("vector") tipo-vector)
-    ;el tipo de firstElement es function
     (tipo ("function") tipo-funcion)
+    (tipo ("unknown") tipo-llamado)
 
     ;;por ahora no crear algo como clase-de-igualdad-con-tipos, ahora solo con id
     (procedimiento ("proc" clase-de-igualdad "(" (separated-list clase-de-igualdad ",") ")" "{" (arbno expresion) "return" expresion-inter ";" "}") procedimiento-recursivo)
@@ -311,15 +335,15 @@
                                          (eval-for clase-declaracion paso condicion clase-asignacion paso body ambiente-aislado)
                                          )
                                        
-                                         (set! ambiente-global ambiente-aislado)));;cuando se termina el for, que el ambiente aislado sea el ambiente-glob orignal
+                                       (set! ambiente-global ambiente-aislado)));;cuando se termina el for, que el ambiente aislado sea el ambiente-glob orignal
         (proc-evaluacion (id-proc rands)
                          (if (eval-procedimiento id-proc rands ambiente-aislado)
                              (begin
-                                         (map (lambda (x) (eval-expresion-solo-for x ambiente-aislado)) body)
-                                         (eval-for clase-declaracion paso condicion clase-asignacion paso body ambiente-aislado)
-                                         )
+                               (map (lambda (x) (eval-expresion-solo-for x ambiente-aislado)) body)
+                               (eval-for clase-declaracion paso condicion clase-asignacion paso body ambiente-aislado)
+                               )
                                        
-                                         (set! ambiente-global ambiente-aislado)))
+                             (set! ambiente-global ambiente-aislado)))
         (else
          (eopl:error 'empty-env "La expresion ~s no es booleana" condicion))))
     ))
@@ -330,31 +354,38 @@
 (define asignar-o-crear-valor-inicial-for
   (lambda (clase valor env)
     (cases clase-de-igualdad clase
-      (variable (id)
+      (variable (tipo id)
                 (if (search-sym-in-this-env env id)
                     (eopl:error 'empty-env "Variable ~s already created" id)
-                    (if (search-sym-in-env ambiente-global id)
-                        (allocate-in-env env "var" "null" id valor)
-                        (allocate-in-env ambiente-global "var" "null" id valor))))
+                    (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                        (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                        (if (search-sym-in-env ambiente-global id)
+                            (allocate-in-env env "var" (eval-tipo tipo) id valor)
+                            (allocate-in-env ambiente-global "var" (eval-tipo tipo) id valor)))))
   
-      (variable-ref (id)
+      (variable-ref (tipo id)
                     (if (search-sym-in-this-env env id)
                         (eopl:error 'empty-env "Variable ~s already created" id)
-                        (if (search-sym-in-env env (get-id-of-expresion-inter valor env))
-                            (allocate-in-env env "var&" "null" id (get-id-of-expresion-inter valor env))
-                            (eopl:error 'empty-env "identifier ~s is not already created" id))))
+                        (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                            (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                            (if (search-sym-in-env env (get-id-of-expresion-inter valor env))
+                                (allocate-in-env env "var&" (eval-tipo tipo) id (get-id-of-expresion-inter valor env))
+                                (eopl:error 'empty-env "identifier ~s is not already created" id)))))
       (else (eopl:error 'error-logico "En el primer slot del for solo se permite crear variables"))
       )))
 
 (define asignar-o-crear-paso-for
   (lambda (clase valor env)
     (cases clase-de-igualdad clase
-      (asignacion-multiple (id)
+      (asignacion-multiple (tipo id)
                            (if (search-sym-in-this-env env id)
                                (eopl:error 'empty-env "Variable ~s already created" id)
-                               (if (search-sym-in-env ambiente-global id)
-                                   (allocate-in-env env "var" "null" id valor)
-                                   (allocate-in-env ambiente-global "var" "null" id valor))))
+                               (if (and (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env)))
+                                        (not (eq? (get-tipo-of-expresion-inter valor env) "unknown" )))
+                                   (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                   (if (search-sym-in-env ambiente-global id)
+                                       (allocate-in-env env "var" (eval-tipo tipo) id valor)
+                                       (allocate-in-env ambiente-global "var" (eval-tipo tipo) id valor)))))
       (else (eopl:error 'error-logico "En el tercer slot del for solo se permite setear variables"))
       )))
 
@@ -370,10 +401,10 @@
                    (letrec
                        (
                         (ambiente-aislado (extended-env-record (make-vector 10 0) (make-vector 10 0) (make-vector 10 0) (make-vector 10 0) env))
-                       (as (asignar-o-crear-para-procs clase valor ambiente-aislado))
-                       )
-                   (set! ambiente-global ambiente-aislado))
-                 ))
+                        (as (asignar-o-crear-para-procs clase valor ambiente-aislado))
+                        )
+                     (set! ambiente-global ambiente-aislado))
+                   ))
       (simple-if (condicion true-body false-body)
 
                  (begin
@@ -521,37 +552,59 @@
 (define asignar-o-crear
   (lambda (clase valor env)
     (cases clase-de-igualdad clase
-      (constante (id)
+      (constante (tipo id)
                  (if (search-sym-in-env env id)
                      (eopl:error 'empty-env "Constant ~s already created" id)
-                     (allocate-in-env env "const" "null" id valor)))
-      (variable (id)
+                     (if (not (eq? (eval-tipo tipo) "function"))
+                         (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                             (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                             (allocate-in-env env "const" (eval-tipo tipo) id valor))
+                         (allocate-in-env env "const" (eval-tipo tipo) id valor))))
+      (variable (tipo id)
                 (if (search-sym-in-env env id)
                     (eopl:error 'empty-env "Variable ~s already created" id)
-                    (allocate-in-env env "var" "null" id valor)))
-      (constante-ref (id)
+                    (if (not (eq? (eval-tipo tipo) "function"))
+                        (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                            (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                            (allocate-in-env env "var" (eval-tipo tipo) id valor))
+                        (allocate-in-env env "var" (eval-tipo tipo) id valor))))
+      (constante-ref (tipo id)
                      (if (search-sym-in-env env id)
                          (eopl:error 'empty-env "Constant ~s already created with the same name" id)
-                         (allocate-in-env env "const&" "null" id valor)))
-      (variable-ref (id)
+                         (if (not (eq? (eval-tipo tipo) "function"))
+                             (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                                 (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                 (allocate-in-env env "const&" (eval-tipo tipo) id valor))
+                             (allocate-in-env env "const&" (eval-tipo tipo) id valor))))
+      (variable-ref (tipo id)
                     (if (search-sym-in-env env id)
                         (eopl:error 'empty-env "Variable ~s already created" id)
-                        (if (search-sym-in-env env (get-id-of-expresion-inter valor env))
-                            (allocate-in-env env "var&" "null" id (get-id-of-expresion-inter valor env))
-                            (eopl:error 'empty-env "identifier ~s is not already created" id))))
-      (asignacion-multiple (id)
+                        (if (not (eq? (eval-tipo tipo) "function"))
+                            (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                                (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                (if (search-sym-in-env env (get-id-of-expresion-inter valor env))
+                                    (allocate-in-env env "var&" (eval-tipo tipo) id (get-id-of-expresion-inter valor env))
+                                    (eopl:error 'empty-env "identifier ~s is not already created" id)))
+                            (allocate-in-env env "var&" (eval-tipo tipo) id (get-id-of-expresion-inter valor env)))))
+      (asignacion-multiple (tipo id)
                            (if (and (search-sym-in-env env id) (or (eq? (type-class-of env id) "var") (eq? (type-class-of env id) "var&")))
-                               (if (eq? (type-class-of env id) "var")
-                                   (set-in-env env id valor)
-                                   (if (search-sym-in-env env (get-value-of env id)) ;; referencia a un blanco indirecto?
-                                       (set-in-env env (get-value-of env id) valor) ;;si referencia a un blanco indirecto setee ese blanco indirecto
-                                       (set-in-env env id valor)));; si referencia a un blanco directo solo cambie de valor
+                               (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                                   (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                   (if (eq? (type-class-of env id) "var")
+                                       (set-in-env env id valor)
+                                       (if (search-sym-in-env env (get-value-of env id)) ;; referencia a un blanco indirecto?
+                                           (set-in-env env (get-value-of env id) valor) ;;si referencia a un blanco indirecto setee ese blanco indirecto
+                                           (set-in-env env id valor))));; si referencia a un blanco directo solo cambie de valor
                                (eopl:error 'empty-env "variable ~s not created yet" id)))
-      (variable-unica (id)
+      (variable-unica (tipo id)
                       (if (search-sym-in-env env id)
                           (eopl:error 'empty-env "Variable unica ~s already created" id)
-                          (allocate-in-env env "let" "null" id valor)))
-      (ultima-asignacion (id)
+                          (if (not (eq? (eval-tipo tipo) "function"))
+                              (if (not (or (eq? (eval-tipo tipo) "null") (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))))
+                                  (eopl:error 'type-error "Type: ~s is diferent of ~s" tipo(get-tipo-of-expresion-inter valor env))
+                                  (allocate-in-env env "let" (eval-tipo tipo) id valor))
+                              (allocate-in-env env "let" (eval-tipo tipo) id valor))))
+      (ultima-asignacion (tipo id)
                          (if (and (search-sym-in-env env id) (eq? (type-class-of env id) "let")) 
                              (if (eqv? (eval-expresion-inter (apply-env env id) env)  "null");para este caso apply-env retorna sint abstracta
                                  (set-in-env env id valor)
@@ -564,16 +617,50 @@
       (null-no-asignado () "null")
       (una-expresion-inter-ent1 (exp-int) (eval-inter-exp-ent exp-int env))
       (una-expresion-inter-bool1 (exp-bool) (eval-inter-exp-bool exp-bool env))
-      (una-expresion-inter-float1 (exp-float) "none")
-      (una-expresion-inter-extra1 (exp-hexa) "none")
-      (una-expresion-inter-oct1 (exp-oct) "none")
-      (una-expresion-inter-b321 (exp-b32) "none") 
-      (una-expresion-inter-cadena1 (exp-cadena) "none")
-      (una-expresion-inter-listas1 (una-lista) "none")
-      (primer-elemento (una-lista) "none")
+      (una-expresion-inter-float1 (exp-float) (eval-inter-exp-float exp-float env))
+      (una-expresion-inter-extra1 (exp-hexa) (eval-inter-exp-hexa exp-hexa env))
+      (una-expresion-inter-oct1 (exp-oct) (eval-inter-exp-oct exp-oct env))
+      (una-expresion-inter-b321 (exp-b32) (eval-inter-exp-b32 exp-b32 env))
+      (una-expresion-inter-cadena1 (exp-cadena) (eval-inter-exp-cadena exp-cadena env))
+      (una-expresion-inter-listas1 (una-lista) (eval-inter-exp-lista una-lista env))
+      (primer-elemento (una-lista) (eval-firstElement una-lista env))
       (proc-evaluacion (id clase-y-rands) (eval-procedimiento id clase-y-rands env ambiente-procs))
       (una-expresion-inter-vector1 (un-vector) (eval-inter-exp-vector un-vector env))
       (n-elemento-vector (exp-inter1 exp-inter2) (eval-vector-ref! exp-inter1 exp-inter2 env))
+      )))
+
+(define eval-tipo
+  (lambda (tipo-exp)
+    (cases tipo tipo-exp
+      (tipo-int () "int")
+      (tipo-bool () "bool")
+      (tipo-float () "float")
+      (tipo-hexa () "hexa")
+      (tipo-oct () "oct")
+      (tipo-b32 () "b32")
+      (tipo-string () "string")
+      (tipo-list () "list")
+      (tipo-vector () "vector")
+      (tipo-funcion () "function")
+      (tipo-llamado () "unknown")
+      )))
+
+(define get-tipo-of-expresion-inter
+  (lambda (exp-inter env)
+    (cases expresion-inter exp-inter
+      (null-no-asignado () "null")
+      (una-expresion-inter-ent1 (exp-int) "int")
+      (una-expresion-inter-bool1 (exp-bool) "bool")
+      (una-expresion-inter-float1 (exp-float) "float")
+      (una-expresion-inter-extra1 (exp-hexa) "hexa")
+      (una-expresion-inter-oct1 (exp-oct) "oct")
+      (una-expresion-inter-b321 (exp-b32) "b32") 
+      (una-expresion-inter-cadena1 (exp-cadena) "string")
+      (una-expresion-inter-listas1 (una-lista) "list")
+      (primer-elemento (una-lista) "unknown")
+      (proc-evaluacion (id clase-y-rands) "unknown")
+      (una-expresion-inter-vector1 (un-vector) "vector")
+      (n-elemento-vector (exp-inter1 exp-inter2) "unkwon")
       )))
 
 (define get-id-of-expresion-inter
@@ -611,27 +698,31 @@
     (cases  expresion-inter-vector un-vector
       (vector-lit-inter (un-vector) un-vector)
       (vector-lit-inter-vector (identificador)
-                                (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
-                                       (if (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "null");;; interpretador1 los tipos son null
-                                           (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
-                                           (eopl:error 'empty-env "No equal type for ~s" identificador))
-                                       (eval-expresion-inter (apply-env env identificador) env)))
+                               (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                   (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "vector")
+                                           (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                       (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                       (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                   (if (or (eq? (type-of-sym env identificador) "vector")
+                                           (eq? (type-of-sym env identificador) "unknown"))
+                                       (eval-expresion-inter (apply-env env identificador) env)
+                                       (eopl:error 'empty-env "No equal type for ~s" identificador))))
       (exp-make-vector (exp-int1 exp-int2)
                        (make-vector (eval-expresion-inter exp-int1 env) (eval-expresion-inter exp-int2 env)))
                                     
       (cambiar-vector (exp-int1 exp-int2 exp-int3)
                       (letrec
                           ((a (eval-expresion-inter exp-int1 env))
-                          (b (vector-set! a (eval-expresion-inter exp-int2 env) (eval-expresion-inter exp-int3 env))))
-                      a))
-    )))
+                           (b (vector-set! a (eval-expresion-inter exp-int2 env) (eval-expresion-inter exp-int3 env))))
+                        a))
+      )))
       
 
 
 ;(eval-vector-ref! exp-inter1 exp-inter2 env)
 (define eval-vector-ref!
   (lambda (exp-inter1 exp-inter2 env)
-     (vector-ref (eval-expresion-inter exp-inter1 env) (eval-expresion-inter exp-inter2 env))))
+    (vector-ref (eval-expresion-inter exp-inter1 env) (eval-expresion-inter exp-inter2 env))))
 
 
 
@@ -668,10 +759,14 @@
       (primi-length (cadena) (length cadena))
       (identificador-lit-inter-ent (identificador)
                                    (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
-                                       (if (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "null");;; interpretador1 los tipos son null
+                                       (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "int")
+                                               (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
                                            (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
                                            (eopl:error 'empty-env "No equal type for ~s" identificador))
-                                       (eval-expresion-inter (apply-env env identificador) env)));no necesita un env
+                                       (if (or (eq? (type-of-sym env identificador) "int")
+                                               (eq? (type-of-sym env identificador) "unknown"))
+                                           (eval-expresion-inter (apply-env env identificador) env)
+                                           (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
       (exp-aritmetica-ent (rand1 primitiva-ent rand2) (eval-primitiva-ent (eval-expresion-inter rand1 env) primitiva-ent (eval-expresion-inter rand2 env)))
       (binaria (primitiva-bin rand) (eval-primitiva-bin primitiva-bin (eval-expresion-inter rand env))))))
 
@@ -705,14 +800,18 @@
     (cases expresion-inter-bool x
       (bool-lit-inter (boolean) boolean)
       (isList (exp-int) (list? (eval-expresion-inter exp-int)))
-      (isEmpty (exp-int) (eqv? '() (eval-expresion-inter exp-int)))
+      (isEmpty (exp-int) (eqv? '() (eval-expresion-inter exp-int env)))
       (bool-lit-bool (boolean) (eval-bool boolean env))
       (identificafor-lit-inter-bool (identificador)
                                     (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
-                                        (if (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "null");;; interpretador1 los tipos son null
+                                        (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "bool")
+                                                (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
                                             (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
                                             (eopl:error 'empty-env "No equal type for ~s" identificador))
-                                        (eval-expresion-inter (apply-env env identificador) env)));no necesita un env
+                                        (if (or (eq? (type-of-sym env identificador) "bool")
+                                                (eq? (type-of-sym env identificador) "unknown"))
+                                            (eval-expresion-inter (apply-env env identificador) env)
+                                            (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
       (exp-aritmetica-bool (exp-inter1 primi-bool exp-inter2)
                            (eval-primitiva-bool (eval-expresion-inter exp-inter1 env) primi-bool (eval-expresion-inter exp-inter2 env)))
       (exp-aritmetica-bool-bin (primi-bool exp-inter) (eval-primitiva-bool-bin primi-bool (eval-expresion-inter exp-inter env)))
@@ -766,43 +865,58 @@
 (define asignar-o-crear-para-procs
   (lambda (clase valor env)
     (cases clase-de-igualdad clase
-      (constante (id)
+      (constante (tipo id)
                  (if (search-sym-in-this-env env id)
                      (eopl:error 'empty-env "Constant ~s already created" id)
-                     (allocate-in-env env "const" "null" id valor)))
-      (variable (id)
+                     (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                         (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                         (allocate-in-env env "const" (eval-tipo tipo) id valor))))
+      (variable (tipo id)
                 (if (search-sym-in-this-env env id)
                     (eopl:error 'empty-env "Variable ~s already created" id)
-                    (allocate-in-env env "var" "null" id valor)))
-      (constante-ref (id)
+                    (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                        (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                        (allocate-in-env env "var" (eval-tipo tipo) id valor))))
+      (constante-ref (tipo id)
                      (if (search-sym-in-this-env env id)
                          (eopl:error 'empty-env "Constant ~s already created" id)
-                         (allocate-in-env env "const&" "null" id valor)))
-      (variable-ref (id)
+                         (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                             (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                             (allocate-in-env env "const&" (eval-tipo tipo) id valor))))
+      (variable-ref (tipo id)
                     (if (search-sym-in-this-env env id)
                         (eopl:error 'empty-env "Variable ~s already created" id)
                         (if (search-sym-in-env env (get-id-of-expresion-inter valor env))
-                            (allocate-in-env env "var&" "null" id (get-id-of-expresion-inter valor env))
+                            (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                                (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                (allocate-in-env env "var&" (eval-tipo tipo) id (get-id-of-expresion-inter valor env)))
                             (eopl:error 'empty-env "identifier ~s is not already created" id))))
-      (asignacion-multiple (id)
+      (asignacion-multiple (tipo id)
                            (if (and (search-sym-in-env env id) (or (eq? (type-class-of env id) "var") (eq? (type-class-of env id) "var&")))
-                               (if (eq? (type-class-of env id) "var")
-                                   (begin
-                                   (set-in-env env id valor)
-                                   (allocate-in-env env "var" "null" id valor))
-                                   (if (search-sym-in-env env (get-value-of env id)) ;; referencia a un blanco indirecto?
-                                       (set-in-env ambiente-global (get-value-of env id) valor) ;;si referencia a un blanco indirecto setee ese blanco indirecto
-                                       (set-in-env env id valor)));; si referencia a un blanco directo solo cambie de valor
+                               (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                                   (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                   (if (eq? (type-class-of env id) "var")
+                                       (begin
+                                         (set-in-env env id valor)
+                                         (allocate-in-env env "var" (eval-tipo tipo) id valor))
+                                       (if (search-sym-in-env env (get-value-of env id)) ;; referencia a un blanco indirecto?
+                                           (set-in-env ambiente-global (get-value-of env id) valor) ;;si referencia a un blanco indirecto setee ese blanco indirecto
+                                           (set-in-env env id valor))));; si referencia a un blanco directo solo cambie de valor
                                (eopl:error 'empty-env "variable ~s not created yet" id)))
-      (variable-unica (id)
+      (variable-unica (tipo id)
                       (if (search-sym-in-this-env env id)
                           (eopl:error 'empty-env "Variable unica ~s already created" id)
-                          (allocate-in-env env "let" "null" id valor)))
-      (ultima-asignacion (id)
-                         (if (and (search-sym-in-this-env env id) (eq? (type-class-of env id) "let")) 
-                             (if (eqv? (eval-expresion-inter (apply-env env id) env)  "null");para este caso apply-env retorna sint abstracta
-                                 (set-in-env env id valor)
-                                 (eopl:error 'empty-env "Variable ~s has already been assigned" id))
+                          
+                          (if (not (or (eq? (eval-tipo tipo) "null") (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env)))) 
+                              (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                              (allocate-in-env env "let" (eval-tipo tipo) id valor))))
+      (ultima-asignacion (tipo id)
+                         (if (and (search-sym-in-this-env env id) (eq? (type-class-of env id) "let"))
+                             (if (not (eq? (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))) 
+                                 (eopl:error 'type-error "Type: ~s is diferent of ~s" (eval-tipo tipo) (get-tipo-of-expresion-inter valor env))
+                                 (if (eqv? (eval-expresion-inter (apply-env env id) env)  "null");para este caso apply-env retorna sint abstracta
+                                     (set-in-env env id valor)
+                                     (eopl:error 'empty-env "Variable ~s has already been assigned" id)))
                              ((eopl:error 'empty-env "Variable of unique assignment ~s is not created yet" id)))))))
 
 
@@ -914,7 +1028,7 @@
   (lambda (env search-sym)
     (cases environment env
       (empty-env-record ()
-                        (eopl:error 'empty-env "No clase asignada a ~s" search-sym))
+                        (eopl:error 'Error-de-tipos "Tipos no coinciden para ~s" search-sym))
       (extended-env-record (type-classes types syms vals old-env)
                            (let ((pos (list-find-position search-sym (vector->list syms))))
                              (if (number? pos)
@@ -997,6 +1111,371 @@
 
 
 
+;*******************************************************************************************
+;------------------------------ evaluaciones relacionas con float        ----------------------------------
+;*******************************************************************************************
+(define eval-primitiva-float
+  (lambda (rand1 x rand2)
+    (cases primitiva-float x
+      (primi-suma-float () (+ rand1 rand2))
+      (primi-resta-float () (- rand1 rand2))
+      (primi-multi-float () (* rand1 rand2))
+      (primi-divi-float () (/ rand1 rand2))
+      (primi-mod-float () (modulo rand1 rand2))
+      (else 0))))
+
+(define eval-primitiva-bin-float
+  (lambda (x rand)
+    (cases primitiva-float x
+      (primi-uno-mas-float () (+ rand 1))
+      (primi-uno-menos-float () (- rand 1))
+      (else 0))))
+
+;evalua sintaxis abstracta de expresiones flotantes. Usa primitivas floatantes. Da como resultado flotantes.
+(define eval-inter-exp-float
+  (lambda (x env)
+    (cases expresion-inter-float x
+      (float-lit-inter (flotante) flotante)
+      (identificafor-lit-inter-float (identificador)
+                                     (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                         (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "float")
+                                                 (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                             (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                             (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                         (if (or (eq? (type-of-sym env identificador) "float")
+                                                 (eq? (type-of-sym env identificador) "unknown"))
+                                             (eval-expresion-inter (apply-env env identificador) env)
+                                             (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
+      (exp-aritmetica-float (rand1 primitiva-float rand2) (eval-primitiva-float (eval-expresion-inter rand1 env) primitiva-float (eval-expresion-inter rand2 env)))
+      (binaria-float (primitiva-bin-float rand) (eval-primitiva-bin-float primitiva-bin-float (eval-expresion-inter rand env))))))
+
+;*******************************************************************************************
+;------------------------------ evaluaciones relacionas con hexa        ----------------------------------
+;*******************************************************************************************
+(define eval-primitiva-hexa
+  (lambda (rand1 x rand2)
+    (if (and (esBase-N? rand1 16) (esBase-N? rand2 16))
+        (cases primitiva-hexa x
+          (primi-suma-hexa () (suma rand1 rand2 15))
+          (primi-resta-hexa () (resta rand1 rand2 15))
+          (primi-multi-hexa () (multiplicacion rand1 rand2 15))
+          (else 0))
+        (eopl:error 'empty-env "Value not in required base for ~s" x))))
+
+(define eval-primitiva-bin-hexa
+  (lambda (x rand)
+    (if (esBase-N? rand 16) 
+        (cases primitiva-hexa x
+          (primi-uno-mas-hexa () (add1 rand 15))
+          (primi-uno-menos-hexa () (sub1 rand 15))
+          (else 0))
+        (eopl:error 'empty-env "Value not in required base for ~s" x)
+        )))
+
+(define eval-inter-exp-hexa
+  (lambda (x env)
+    (cases expresion-inter-hexa x
+      (hexa-lit-inter (hexal) (eval-hexal-exp hexal env))
+      (identificafor-lit-inter-hexa (identificador)
+                                    (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                        (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "hexa")
+                                                (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                            (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                            (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                        (if (or (eq? (type-of-sym env identificador) "hexa")
+                                                (eq? (type-of-sym env identificador) "unknown"))
+                                            (eval-expresion-inter (apply-env env identificador) env)
+                                            (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
+      (exp-aritmetica-hexa (rand1 primitiva-hexa rand2)
+                           (eval-primitiva-hexa (eval-inter-exp-hexa rand1 env) primitiva-hexa (eval-inter-exp-hexa rand2 env)))
+      (binaria-hexa (primitiva-bin-hexa rand) (eval-primitiva-bin-hexa primitiva-bin-hexa (eval-inter-exp-hexa rand env))))))
+
+(define eval-hexal-exp
+  (lambda (x env)
+    (cases hexa x
+      (hexales (lista-hexa) lista-hexa))))
+
+
+
+;*******************************************************************************************
+;------------------------------ evaluaciones relacionas con oct        ----------------------------------
+;*******************************************************************************************
+(define eval-primitiva-oct
+  (lambda (rand1 x rand2)
+    (if (and (esBase-N? rand1 8) (esBase-N? rand2 8))
+        (cases primitiva-oct x
+          (primi-suma-oct () (suma rand1 rand2 7))
+          (primi-resta-oct () (resta rand1 rand2 7))
+          (primi-multi-oct () (multiplicacion rand1 rand2 7))
+          (else 0))
+        (eopl:error 'empty-env "Value not in required base for ~s" x))))
+
+(define eval-primitiva-bin-oct
+  (lambda (x rand)
+    (if (esBase-N? rand 8) 
+        (cases primitiva-oct x
+          (primi-uno-mas-oct () (add1 rand 7))
+          (primi-uno-menos-oct () (sub1 rand 7))
+          (else 0))
+        (eopl:error 'empty-env "Value not in required base for ~s" x))))
+
+(define eval-inter-exp-oct
+  (lambda (x env)
+    (cases expresion-inter-oct x
+      (oct-lit-inter (octal) (eval-oct-exp octal env))
+      (identificafor-lit-inter-oct (identificador)
+                                   (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                       (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "oct")
+                                               (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                           (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                           (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                       (if (or (eq? (type-of-sym env identificador) "oct")
+                                               (eq? (type-of-sym env identificador) "unknown"))
+                                           (eval-expresion-inter (apply-env env identificador) env)
+                                           (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
+      (exp-aritmetica-oct (rand1 primitiva-oct rand2)
+                          (eval-primitiva-oct (eval-inter-exp-oct rand1 env) primitiva-oct (eval-inter-exp-oct rand2 env)))
+      (binaria-oct (primitiva-bin-oct rand) (eval-primitiva-bin-oct primitiva-bin-oct (eval-inter-exp-oct rand env))))))
+
+(define eval-oct-exp
+  (lambda (x env)
+    (cases oct x
+      (octales (lista-oct) lista-oct))))
+
+;*******************************************************************************************
+;------------------------------ evaluaciones relacionas con b32        ----------------------------------
+;*******************************************************************************************
+(define eval-primitiva-b32
+  (lambda (rand1 x rand2)
+    (if (and (esBase-N? rand1 32) (esBase-N? rand2 32))
+        (cases primitiva-b32 x
+          (primi-suma-b32 () (suma rand1 rand2 31))
+          (primi-resta-b32 () (resta rand1 rand2 31))
+          (primi-multi-b32 () (multiplicacion rand1 rand2 31))
+          (else 0))
+        (eopl:error 'empty-env "Value not in required base for ~s" x))))
+
+(define eval-primitiva-bin-b32
+  (lambda (x rand)
+    (if (esBase-N? rand 32) 
+        (cases primitiva-b32 x
+          (primi-uno-mas-b32 () (add1 rand 31))
+          (primi-uno-menos-b32 () (sub1 rand 31))
+          (else 0))
+        (eopl:error 'empty-env "Value not in required base for ~s" x))))
+
+(define eval-inter-exp-b32
+  (lambda (x env)
+    (cases expresion-inter-b32 x
+      (b32-lit-inter (b32ss) (eval-b32-exp b32ss env))
+      (identificafor-lit-inter-b32 (identificador)
+                                   (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                       (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "b32")
+                                               (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                           (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                           (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                       (if (or (eq? (type-of-sym env identificador) "b32")
+                                               (eq? (type-of-sym env identificador) "unknown"))
+                                           (eval-expresion-inter (apply-env env identificador) env)
+                                           (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
+      (exp-aritmetica-b32 (rand1 primitiva-b32 rand2)
+                          (eval-primitiva-b32 (eval-inter-exp-b32 rand1 env) primitiva-b32 (eval-inter-exp-b32 rand2 env)))
+      (binaria-b32 (primitiva-bin-b32 rand) (eval-primitiva-bin-b32 primitiva-bin-b32 (eval-inter-exp-b32 rand env))))))
+
+(define eval-b32-exp
+  (lambda (x env)
+    (cases b32 x
+      (b32s (lista-b32) lista-b32))))
+
+;*******************************************************************************************
+;------------------------------ cadenas       ----------------------------------
+;*******************************************************************************************
+
+
+(define eval-inter-exp-cadena
+  (lambda (x env)
+    (cases expresion-inter-cadena x
+      (string-lit-inter (str) (substring (symbol->string str) 1 (- (string-length (symbol->string str)) 1)))
+      (identificafor-lit-inter-cadena (identificador)
+                                      (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                          (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "string")
+                                                  (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                              (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                              (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                          (if (or (eq? (type-of-sym env identificador) "string")
+                                                  (eq? (type-of-sym env identificador) "unknown"))
+                                              (eval-expresion-inter (apply-env env identificador) env)
+                                              (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
+      (primi-concat (str1 str2) (string-append (eval-expresion-inter str1 env) (eval-expresion-inter str2 env)))
+      )))
+
+
+;*******************************************************************************************
+;----------------------------------- listas  ----------------------------------------
+;*******************************************************************************************
+
+
+(define eval-inter-exp-lista
+  (lambda (x env)
+    (cases expresion-inter-lista x
+      (list-lit-inter (una-list) (eval-cada-elem-de-lista (eval-lista-exp una-list env) env))
+      (identificafor-lit-inter-lista (identificador)
+                                     (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
+                                         (if (or (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "list")
+                                                 (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "unknown"))
+                                             (eval-expresion-inter (apply-env env identificador) (quitar-ultima-extencion-de-ambiente env))
+                                             (eopl:error 'empty-env "No equal type for ~s" identificador))
+                                         (if (or (eq? (type-of-sym env identificador) "list")
+                                                 (eq? (type-of-sym env identificador) "unknown"))
+                                             (eval-expresion-inter (apply-env env identificador) env)
+                                             (eopl:error 'empty-env "No equal type for ~s" identificador))));no necesita un env
+      (empty1 () empty)
+      (cons1 (exp-inter1 exp-inter2) (append (list (eval-expresion-inter exp-inter1 env)) (eval-expresion-inter exp-inter2 env)));necesario tipos?
+      (cdr1 (exp-inter) (cdr (eval-expresion-inter exp-inter env)))
+      (append1 (exp-inter1 exp-inter2) (append (eval-expresion-inter exp-inter1 env) (eval-expresion-inter exp-inter2 env)));necesario tipos?
+      )))
+
+(define eval-lista-exp
+  (lambda (x env)
+    (cases lista x
+      (listas (una-lista) una-lista))))
+
+(define eval-cada-elem-de-lista
+  (lambda (x env)
+    (map (lambda (x) (eval-expresion-inter x env)) x)))
+
+
+;*******************************************************************************************
+;----------------------------------- firstElement  ----------------------------------------
+;*******************************************************************************************
+
+(define eval-firstElement
+  (lambda (x env)
+    (car (eval-inter-exp-lista x env))))
+
+
+
+;*******************************************************************************************
+;----------------- add1 sub1 suma resta multiplicacion hexa octa b32 esBase-N?    ---------------------
+;*******************************************************************************************
+
+;;proposito: mira si los elementos de una lista son menores a B (mira si una lista es hexa, octa o b32)
+(define esBase-N?
+  (lambda (x B)
+    (if (eq? '() x)
+        #t
+        (if (< (car x) B)
+            (esBase-N? (cdr x) B)
+            #f))))
+
+;;Propósito: cuando se llama, devuelve una lista vacia
+(define zero
+  (lambda () '()))
+;(zero)
+;()
+;(zero)
+;()
+
+;;Propósito: checkea si el argumento es una lista vacia, si no lo es, retorna #f
+(define is-zero?
+  (lambda (lista)
+    (null? lista)))
+;(is-zero? '())
+;#t
+;(is-zero? '(1))
+;#f
+
+;;Proposito: halla la respresentacion en Bignum del siguiente numero en Bignum que se le pase como parámetro.
+(define add1
+  (lambda (lista B)
+    (if (eq? lista '())
+        '(1)
+        (if (eq? (car lista) B)
+            (if (eq? (length lista) 1)
+                '(0 1);aumenta uno al final
+                (append '(0) (add1 (cdr lista) B)))
+            (append (list (+ 1 (car lista))) (cdr lista))))))
+;(add1 '(0 0 1) 15)
+;256 -> 257
+;'(1 0 1)
+;(add1 '(15 15) 15)
+;255 -> 256
+;'(0 0 1)
+;(add1 '(7 8 9 3 5 3) 15)
+;3488135 -> 3488136
+;'(8 8 9 3 5 3)
+;(add1 '(3 4 1 1) 15)
+;4419 -> 4420
+;'(4 4 1 1)
+
+;;Proposito: halla la representacion en Bignum del numero que precede al numero que representa la entra en Bignum
+(define sub1
+  (lambda (lista B)
+    (if (eq? (car lista) 0)
+        (append (list B) (sub1 (cdr lista) B))
+        (if (or (equal? lista (list 1)) (equal? lista (list)))
+            '()
+            (append (list (- (car lista) 1)) (cdr lista))))
+    ))
+;(sub1 '(1) 15)
+;'()
+;(sub1 '(0 1) 15)
+;'(15)
+;(sub1 '(4 4 1 1) 15)
+;(3 4 1 1)
+;(sub1 '(8 8 9 3 5 3) 15)
+;(7 8 9 3 5 3)
+;(sub1 '(0 0 1) 15)
+;(15 15)
+;(sub1 '(1 0 1) 15)
+;(0 0 1)
+
+;suma para Bignum datatype
+;solo tengo en cuenta dos sumandos
+;Proposito: tiene como entrada dos parametros que deben estar en Bignum, retorna el Bignum que representa la suma de los numeros representados en los parametros
+(define suma
+  (lambda (x y B)
+    (if (is-zero? x)
+        y
+        (add1 (suma (sub1 x B) y B) B))))
+;(suma '(15 15) '(0 0 1) 15)
+;(15 15 1)
+;(suma '(15 15) '(1) 15)
+;(0 0 1)
+;(suma '(15 15) '() 15)
+;(15 15)
+
+;Proposito: tiene como entrada dos parametros que deben estar en Bignum, retorna el Bignum que representa la resta de los numeros representados en los parametros. La resta siempre debe dar como resultado un Bignum que representa a un numero positivo.
+(define resta
+  (lambda (x y B)
+    (if (is-zero? y)
+        x
+        (sub1 (resta  x (sub1 y B) B) B))))
+;(resta '(0 0 1) '(15 15) 15)
+;(1)
+;(resta '(15 15) '() 15)
+;(15 15)
+;(resta '(15 15) '(1) 15)
+;(14 15)
+
+;Proposito: tiene como entrada dos parametros que deben estar en Bignum, retorna el Bignum que representa la multiplicacion de los numeros representados en los parametros.
+(define multiplicacion
+  (lambda (x y B)
+    (if (is-zero? x)
+        (zero)
+        (suma (multiplicacion (sub1 x B) y B) y B))
+    ))
+;(multiplicacion '(1) '(0 1) 15)
+;(0 1)
+;(multiplicacion '(0 1) '(1) 15)
+;(0 1)
+;(multiplicacion '(0 1) '(0 0 1) 15)
+;(0 0 0 1)
+;(multiplicacion '(0 0 1) '(0 1) 15)
+;(0 0 0 1)
+;*******************************************************************************************
+;----------    fin add1 sub1 suma resta multiplicacion hexa octa b32 esBase-N?    ----------
+;*******************************************************************************************
 
 
 
@@ -1022,29 +1501,71 @@
 
 
 
-; proc let factorial = (var num = )
-; {
-;   if ( bool (int num == int 1) ) {
-;       return int 1;
-;   }else{
-;       return int (int num * factorial (int (int num - int 1) ) ) ; 
-;   }
-;       return int 1010101;
-; }
-; proc let doble = (var num = )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+; proc let function doble = (var int num = )
 ; {
 ;    return int (int num * int 2) ; 
 ; }
 ; main(){
-;      const gh = doble ( int 1 );
-;      return factorial ( int ( int 1 + factorial (doble ( int gh )  ) ) );
+;      const unknwon gh = doble ( int 1 );
+;      return int gh;
 ; }
 
 
-; proc let simpleEnv = (var num = )
+; proc let function simpleEnv = (var int num = )
 ; {
-;  let booleano = null;
-;  unique_assignment booleano = bool false; 
+;  let bool booleano = bool false; 
 ;  return bool not bool booleano ;
 ; }
 ; main(){
@@ -1052,7 +1573,7 @@
 ; }
 
 
-; proc let factorial = (var num = ){
+; proc let function factorial = (var int num = ){
 ;   if ( bool (int num == int 1) ) {
 ;       return int 1;
 ;   }else{
@@ -1065,12 +1586,12 @@
 ; }
 
 
-; proc let fibonacci = (var num = ){
+; proc let function fibonacci = (var int num = ){
 ;   if (bool ( bool (int num == int 1) or bool (int num == int 0) ) ) {
 ;       if ( bool (int num == int 0) )
 ;       {
-;          var a = int 1;
-;          set_var a = int 0;
+;          var int a = int 1;
+;          set_var int a = int 0;
 ;          return int a;                              
 ;       }
 ;       else
@@ -1089,66 +1610,66 @@
 ; }
 
 
-; proc let simpleEnv = (var& num = )
+; proc let function simpleEnv = (var& int num = )
 ; {
-;  set_var num = int (int 13 + int 1); 
+;  set_var int num = int (int 13 + int 1); 
 ;  return int num;
 ; }
 ; main(){
-;      var g = int 1;
-;      var v = simpleEnv(int g);
+;      var int g = int 1;
+;      var unknown v = simpleEnv(int g);
 ;      return int g;
 ; }
 
 
 ; main(){
-;   var dt = int 13;
-;   var& aumentar = int dt;
-;   set_var aumentar = int (int 13 + int 1); 
+;   var int dt = int 13;
+;   var& int aumentar = bool dt;
+;   set_var int aumentar = int (int 13 + int 1); 
+;   return vector aumentar;
+; }
+
+
+; main(){
+;   const int dt = int 13;
+;   var& int  aumentar = int dt;
+;   set_var int aumentar = int (int 13 + int 1); 
 ;   return int aumentar;
 ; }
 
 
 ; main(){
-;   const dt = int 13;
-;   var& aumentar = int dt;
-;   set_var aumentar = int (int 13 + int 1); 
-;   return int aumentar;
-; }
-
-
-; main(){
-;   var aumentar = int 13;
-;   const numero = int -100;
-;   set_var aumentar = int (int numero + int 1);
+;   var int aumentar = int 13;
+;   const int numero = int -100;
+;   set_var int aumentar = int (int numero + int 1);
 ;   IF (bool (int -98 == int aumentar))
 ;   {
-;     set_var aumentar = int (int 13 + int 2);
+;     set_var int aumentar = int (int 13 + int 2);
 ;   }
 ;   ELSE
 ;   {
-;     set_var aumentar = int 0;
+;     set_var int aumentar = int 0;
 ;   }
 ;   return int aumentar;
 ; }
 
 
-; proc const prueba = (var x =)
+; proc const function prueba = (var int x =)
 ; {
-;   var aumentar = int 13;
-;   const numero = int -100;
-;   set_var aumentar = int (int numero + int 1);
+;   var int aumentar = int 13;
+;   const int numero = int -100;
+;   set_var int aumentar = int (int numero + int 1);
 ;   IF (bool (int -99 == int aumentar))
 ;   {
-;     set_var aumentar = int (int 13 + int 2);
-;     for (var a = int 1; bool (int a < int 10); set_var a = int (int a + int 1))
+;     set_var int aumentar = int (int 13 + int 2);
+;     for (var int a = int 1; bool (int a < int 10); set_var int a = int (int a + int 1))
 ;     {
-;       set_var aumentar = int (int b + int 1);
+;       set_var int aumentar = int (int b + int 1);
 ;     }
 ;   }
 ;   ELSE
 ;   {
-;     set_var aumentar = int 0;
+;     set_var int aumentar = int 0;
 ;   }
 ;   return int aumentar;
 ; }
@@ -1156,19 +1677,6 @@
 ;   return prueba(int 1);
 ; }
 
-; proc const prueba = (var x =)
-; {
-;   var aumentar = int 13;
-;   for (var a = int 1; bool (int a < int 10); set_var a = int (int a + int 1))
-;   {
-;      set_var aumentar = int (int a + int 1);
-;   }
-; 
-;   return int aumentar;
-; }
-; main(){
-;   return prueba(int 1);
-; }
 
 ; main(){
 ;   var b = int 0;
@@ -1187,28 +1695,47 @@
 ;   return int b;
 ; }
 
+
 ; main(){
-;   var b = int 1;
-;   for (var a = int 1; bool (int a < int 10); set_var a = int (int a + int 1))
+;   var int b = int 1;
+;   var vector c = vector make-vector(int 10, string 'a');    
+;   for (var int a = int 0; bool (int a < int 10); set_var int a = int (int a + int 1))
 ;   {
+;     set_var vector c = vector vector-set!(vector c,int a,int a) ;
 ;     print(int a);
-;     set_var b = int (int b + int a);
+;     set_var int b = int (int b + int a);
 ;   }
 ;   print(string '     ');
-;   return int b;
+;   return vector c;
 ; }
 
 
 ; main(){
 ;   
-;   var c = null;
-;   var b = vector make-vector(int 10, int 0);
-;   for (var a = int 1; bool (int a < int 10) ; var a = int (int a + int 1) )
+;   var int c = int 1;
+;   var string txt = string ' ';
+;   var vector b = vector make-vector(int 10, int 0);
+;   for (var list a = list [int 1, int 2, int 1]; bool not bool isEmpty?(list a) ; var list a = list restElements ( list a) )
 ;   { 
+;      set_var string txt = string concat(firstElement(a),string txt);
+;      print( string txt );
 ;      
-;      print( int a );
 ;     
-;      
+;   
 ;   }
-;   return vector b;
+;   print(string '     '); 
+;   return string txt;
+; }
+
+; main(){
+;   var int b = int 1;
+;   var list c = list empty( ) ;    
+;   for (var int a = int 10; bool (int a <= int 10); set_var int a = int (int a + int 1))
+;   {
+;     set_var list c = list cons(int a, list c);
+;     print(int a);
+;     set_var int b = int (int b + int a);
+;   }
+;   print(string '     ');
+;   return list c;
 ; }
