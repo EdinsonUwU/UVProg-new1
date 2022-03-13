@@ -1,7 +1,75 @@
 #lang eopl
 
+;Integrante:
+;EDINSON ORLANDO DORADO DORADO 1941966-3743
 
-;_____________________________________________ BNF en revision, debido a cambios en la gramatical _____________________________________________
+;INSPIRADO EN:
+;Expresiones: terminan en (;) o en (}). No Pueden contener o ser asignadas a otras expresiones, ¿Por qué? Por los (;)    --> c++
+;Procedimientos (creacion): terminan en (}). No pueden ser usados dentro de if, o dentro otros procedimientos.           --> c++
+;Procedimientos-inter (llamado): tienen la forma 'f(int a, int b)'. Pueden ser almacenados, llamados dentor de condiciones de if, dentro de otros procedimientos. --> c++
+;Primitivas: notacion infija, se obliga al programador a expresar que se debe hacer primero --> c++ (mayormente)
+;Expresiones-inter: son expresiones que pueden ser colocadas dentro de codicionales, ej: 'if(bool a){...' o dentro de llamados a procedimientos
+;                   ej: 'if( factorial(int (1 + 2)) ){...'                                                                --> c++
+
+
+
+;;Notas importantes
+;; null equivale a @UVProgVal
+;; el paso por valor son todos los pasos que no tienen "ref" al comienzo. (paso por valor)
+;; cuando un identificador esta despues de un ref, lo que se retorna ahi es una referencia, no un valor (paso por referencia)
+;; La secuenciacion son todas las listas de expresiones antes de un return. Por tanto cada if, main, procedimiento, tienen secuenciacion
+;; dentro de un if, antes de un return, se pueden crear mas if
+;; Todos los procedimientos son recursivos
+;; Todo esto se muestra en los ejemplos.
+
+;_____________________________________________ FIN basado en _____________________________________________
+
+;;  <programa>          ::= {<procedimiento>}*
+;;                          main() ({) {<expresion>}* return <expresion> (})
+;;                          <un-programa (prog)>
+
+;;  <expresion>         ::= if (() <expresion-inter> ()) ({) {<expresion>}* return <expresion-inter> (;) (}) else ({) {<expresion>}* return <expresion-inter> (;)(})
+;;                           <condicional-exp (exp-inter exp-true exp-false)>
+;;
+;;                      ::= const id = <expresion-inter> (;)
+;;                           <identificador-const (tipo id ligadura)>
+;;
+;;                      ::= var id = <expresion-inter> (;)
+;;                           <identificador-var (tipo id asignacion)>
+;;
+;;                      ::= set_var id = <expresion-inter> (;)
+;;                           <asignacion-multiple>
+;;
+;;                      ::= let id(;)
+;;                           <identificador-una-asignacion (tipo id)>
+;;
+;;                      ::= unique_assignment id "=" <expresion-inter> ";"
+;;                           <asignacion-unica>
+
+;;                          procedimientos tanto recursivos como no recursivos:
+;;         
+;; <procedimiento>      ::= <id> (() {<expresion-inter> (,)}* ()) ({) {<expresion>}* return <expresion-inter> (;) (})
+;;                          <procedimiento-rec (ids body)>
+
+;;<expresion-inter>     ::= null
+;;<expresion-inter>     ::= int <exp-int>
+;;<expresion-inter>     ::= bool <exp-bool>
+;;<expresion-inter>     ::= string <exp-string>
+;;               ...
+;;<expresion-inter>     ::= hexa <exp-hexa>
+;;<expresion-inter>     ::= list <exp-list>
+
+;;<exp-int>             ::= (<expresion-inter> <primitiva-int> <expresion-inter>)
+;;<exp-int>             ::= id
+;;<exp-bool>             ::= (<expresion-inter> <primitiva-bool> <expresion-inter>)
+;;<exp-bool>             ::= id
+;;               ...
+;;<exp-hexa>             ::= "[x16"  {<expresion-inter> (-)}* "]"
+;;<exp-hexa>             ::= id
+;;<exp-list>             ::= "[" {<expresion-inter> (,)}* "]"
+;;<exp-list>             ::= id
+
+;______________________BNF resumida (lo mas importante, como se puede ver, es c++)________________________________
 
 (define scanner-spec-simple-interpreter
   '((comment 
@@ -189,8 +257,6 @@
                    (begin
                      (guardar-procs-en-global-env ambiente-solo-procs procs))
                    (eval-expresions  body return env)
-                   
-                   
                    ))))
 
 
@@ -1197,3 +1263,231 @@
 ; main (){
 ;    return miList(list [int 1, int 2, list [float 1.5, float 1.65 ], int 3, int 4]);
 ; }
+
+; 
+; main (){
+;    return int 1;
+; }
+
+
+;*******************************************************************************************
+;----------    Ejemlos scan&parse   ----------
+;*******************************************************************************************
+
+
+
+; 
+; (allocate-in-env global-env "let" "null" 'b "null")
+; (apply-env global-env 'b)
+; ----------------------------------------------- Siguientes son los scan&parse o en interpretador
+; main(){
+;        let b = null;
+;        const c = int 1;
+;        unique_assignment b = bool true;
+;        return bool b;
+;      }
+; -----------------------------------------------
+; proc const a = (int a){
+;     return null;
+;                       }
+;   main (){
+;        let b = null;
+;        const c = int 1;
+;        unique_assignment b = bool true;
+;        return int a;
+;                  }
+; -----------------------------------------------
+; proc const a = (int a){
+;     return int (int a + int a);
+;                       }
+;   main (){
+;        let b = null;
+;        const c = int (int 1 + int 3);
+;        unique_assignment b = bool true;
+;        return int c;
+;                  }
+; ----------------------------------------------
+;  main (){
+;        var a = int 3;
+;        set_var a = int 10;
+;        const c = int (int a + int 3);
+;        return int c;
+;                  }
+; ----------------------------------------------
+;  main (){
+;        var a = int 3;
+;        set_var a = int 10;
+;        const c = int (int a + int 3);
+;        return int c;
+;                  }
+; ----------------------------------------------
+;  main (){
+;        var a = bool false;
+;        set_var a = bool true;
+;        const c = bool (bool a == bool false);
+;        return int c;
+;                  }
+; ----------------------------------------------
+; main (){
+;        var a = bool not bool false;
+;        const c = bool (bool a == bool false);
+;        return bool c;
+;                  }
+; ----------------------------------------------
+; main (){
+;        var a = float 1.4;
+;        const c = bool (bool a == bool false);
+;        return float (float a +_float float 1.3);
+;                  }
+; ----------------------------------------------
+; main (){
+;        var a = float add1_float float 1.4;
+;        const c = bool (bool a == bool false);
+;        return float (float a +_float float 1.3);
+;                  }
+; ----------------------------------------------
+; main() {
+;        var a = hexa [x16 15 - 15];
+;        const b = hexa [x16 0 - 0 - 1];
+;        return hexa (a +_hexa b);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = oct [x8 15 - 15];
+;        const b = hexa [x16 0 - 0 - 1];
+;        return oct (a +_oct [x8 0 - 0 - 1]);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = b32 [x32 15 - 15];
+;        const b = b32 [x32 0 - 0 - 1];
+;        return b32 (a +_b32 [x32 0 - 0 - 1]);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = string 'hello';
+;        const b = string ' friend';
+;        return string concat(string a , string b);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = string 'hello';
+;        const b = string ' friend';
+;        return string concat(string a , string b);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = list [int 1 , bool false];
+;        const b = string ' friend';
+;        return list a;
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements(list a);
+;        return list append(list a,list c);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements(list a);
+;        unique_assignment c = int 1;
+;        return list append(list a,list c);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements(list a);
+;        unique_assignment d = int 1;
+;        return list append(list a,list c);
+;     }
+; ------------!!!peligroso!!!--------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements(list a);
+;        var d = int 1;
+;        return list cons(list a,int c);
+;     }
+; ------------!!!peligroso!!!--------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements(list a);
+;        var d = int 1;
+;        return list cons(int d,list a);
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements(list a);
+;        var d = int 1;
+;        return list cons(int d,list empty ( ));
+; 
+;     }
+; ----------------------------------------------
+; main() {
+;        var a = list [int 1 , list [int 1 , bool false]];
+;        const b =  list [string ' friend'];
+;        let c = list restElements (firstElement( restElements(list a) ));
+;        var d = int 1;
+;        return list c;
+;     }
+; ----------------------------------------------
+; proc let prueba = (l){
+;   return int l;
+; }
+; main(){
+;   return prueba (int 1);
+;   }
+; ----------------------------------------------
+; proc let factorial = (num){
+;   if (bool (bool (int num == int 0) or bool (int num == int 1) ) ) {
+;       return int 1;
+;   }else{
+;       return int (int num * factorial (int ( int num - int 1 ) ) ) ; 
+;   }
+;       return int -1;
+;   }
+; main(){
+;      return factorial( int 4 );
+; }
+; ----------------------------------------------
+; proc let factorial = (var num = ){
+;       return factorial (int ( int num - int 1 ) );
+;   }
+; main(){
+;      return factorial( int 4 );
+; }
+; ----------------------------------------------
+; proc let factorial = (var num = ){
+;   if (bool (bool (int num == int 0) or bool (int num == int 1) ) ) {
+;       return int 1;
+;   }else{
+;       const abc = int 101;
+;       return int (int num * factorial ( int ( int num - int 1 ) ) ) ; 
+;   }
+;       return int num;
+;   }
+; main(){
+;      return factorial( int 4 );
+; }
+; ----------------------------------------------
+; proc let factorial = (var num = ){
+;   if (bool (bool (int num == int 0) or bool (int num == int 1) ) ) {
+;       return int 1;
+;   }else{
+;       const abc = int ( int num - int 1 );
+;       return int (int num * factorial ( int abc ) ) ; 
+;   }
+;       return int num;
+;   }
+; main(){
+;      return factorial( int 2 );
+; }
+
+
