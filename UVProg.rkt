@@ -481,7 +481,7 @@
   (lambda (x env)
     (cases expresion-inter-ent x
       (numero-lit-inter (entero) entero)
-      (primi-length (cadena) (length cadena))
+      (primi-length (cadena) (string-length (eval-inter-exp-cadena cadena env)))
       (identificador-lit-inter-ent (identificador)
                                    (if (search-sym-in-env (quitar-ultima-extencion-de-ambiente env) identificador)
                                        (if (eq? (type-of-sym (quitar-ultima-extencion-de-ambiente env) identificador) "null");;; interpretador1 los tipos son null
