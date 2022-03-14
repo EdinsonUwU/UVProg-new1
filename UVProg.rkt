@@ -610,7 +610,7 @@
                           (eopl:error 'empty-env "Variable unica ~s already created" id)
                           (allocate-in-env env "let" "null" id valor)))
       (ultima-asignacion (id)
-                         (if (and (search-sym-in-this-env env id) (eq? (type-class-of env id) "let ")) 
+                         (if (and (search-sym-in-this-env env id) (eq? (type-class-of env id) "let")) 
                              (if (eqv? (eval-expresion-inter (apply-env env id) env)  "null");para este caso apply-env retorna sint abstracta
                                    (set-in-env env id valor)
                                  (eopl:error 'empty-env "Variable ~s has already been assigned" id))
