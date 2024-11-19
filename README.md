@@ -1,5 +1,5 @@
 # UVProg-new1
-Proyecto final materia FLP. Interpretador en base a c++.
+Proyecto final materia FLP. Interpretador inspirado en c++, python, js.
 
 
 # **INTEGRANTE**
